@@ -1,22 +1,26 @@
 package com.photovault.app;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.media.ThumbnailUtils;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.view.Gravity;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.GridLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
@@ -27,7 +31,9 @@ import java.util.Locale;
 public class MainActivity extends Activity {
 
     private static final int PICK_MEDIA = 100;
+    private static final int DELETE_MEDIA = 200;
 
+    // PIN التجريبي
     private static final String PIN = "1234";
 
     private final int BG = Color.rgb(13, 17, 23);
@@ -37,10 +43,18 @@ public class MainActivity extends Activity {
     private final int TEXT = Color.rgb(230, 237, 243);
     private final int MUTED = Color.rgb(139, 148, 158);
 
-    private LinearLayout content;
+    private LinearLayout galleryContainer;
 
-    private final ArrayList<File> vaultFiles =
+    private final ArrayList<VaultItem> vaultItems =
             new ArrayList<>();
+
+    // الملفات الأصلية التي سيتم حذفها من المعرض
+    private final ArrayList<Uri> pendingDeleteUris =
+            new ArrayList<>();
+
+    private int currentTab = 0;
+    // 0 = الصور
+    // 1 = الفيديوهات
 
     private int dp(int value) {
         return Math.round(
@@ -57,8 +71,6 @@ public class MainActivity extends Activity {
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
 
-        loadFiles();
-
         showPinScreen();
     }
 
@@ -68,38 +80,36 @@ public class MainActivity extends Activity {
 
     private void showPinScreen() {
 
-        LinearLayout root =
+        LinearLayout layout =
                 new LinearLayout(this);
 
-        root.setOrientation(
+        layout.setOrientation(
                 LinearLayout.VERTICAL
         );
 
-        root.setGravity(
-                Gravity.CENTER
-        );
+        layout.setGravity(Gravity.CENTER);
 
-        root.setPadding(
+        layout.setPadding(
                 dp(30),
                 dp(30),
                 dp(30),
                 dp(30)
         );
 
-        root.setBackgroundColor(BG);
+        layout.setBackgroundColor(BG);
 
         TextView icon =
                 new TextView(this);
 
         icon.setText("🔐");
-        icon.setTextSize(55);
+        icon.setTextSize(60);
         icon.setGravity(Gravity.CENTER);
 
-        root.addView(
+        layout.addView(
                 icon,
                 new LinearLayout.LayoutParams(
                         -1,
-                        dp(80)
+                        dp(90)
                 )
         );
 
@@ -108,14 +118,15 @@ public class MainActivity extends Activity {
 
         title.setText("PhotoVault");
         title.setTextColor(TEXT);
-        title.setTextSize(28);
+        title.setTextSize(30);
         title.setGravity(Gravity.CENTER);
+
         title.setTypeface(
                 Typeface.DEFAULT,
                 Typeface.BOLD
         );
 
-        root.addView(
+        layout.addView(
                 title,
                 new LinearLayout.LayoutParams(
                         -1,
@@ -127,25 +138,25 @@ public class MainActivity extends Activity {
                 new TextView(this);
 
         subtitle.setText(
-                "أدخل رمز PIN لفتح الخزنة"
+                "خزنة خاصة للصور والفيديوهات"
         );
 
         subtitle.setTextColor(MUTED);
         subtitle.setTextSize(15);
         subtitle.setGravity(Gravity.CENTER);
 
-        root.addView(
+        layout.addView(
                 subtitle,
                 new LinearLayout.LayoutParams(
                         -1,
-                        dp(40)
+                        dp(45)
                 )
         );
 
         EditText pin =
                 new EditText(this);
 
-        pin.setHint("PIN");
+        pin.setHint("أدخل PIN");
         pin.setHintTextColor(MUTED);
         pin.setTextColor(TEXT);
         pin.setTextSize(20);
@@ -156,7 +167,7 @@ public class MainActivity extends Activity {
                 android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
         );
 
-        root.addView(
+        layout.addView(
                 pin,
                 new LinearLayout.LayoutParams(
                         -1,
@@ -172,40 +183,39 @@ public class MainActivity extends Activity {
         unlock.setTextSize(16);
         unlock.setAllCaps(false);
 
-        android.graphics.drawable.GradientDrawable bg =
-                new android.graphics.drawable.GradientDrawable();
+        unlock.setBackground(
+                roundedBackground(
+                        PRIMARY,
+                        14
+                )
+        );
 
-        bg.setColor(PRIMARY);
-        bg.setCornerRadius(dp(14));
-
-        unlock.setBackground(bg);
-
-        LinearLayout.LayoutParams up =
+        LinearLayout.LayoutParams unlockParams =
                 new LinearLayout.LayoutParams(
                         -1,
                         dp(55)
                 );
 
-        up.topMargin = dp(15);
+        unlockParams.topMargin = dp(15);
 
-        root.addView(
+        layout.addView(
                 unlock,
-                up
+                unlockParams
         );
 
-        TextView hint =
+        TextView demo =
                 new TextView(this);
 
-        hint.setText(
-                "رمز التجربة: 1234"
+        demo.setText(
+                "PIN التجريبي: 1234"
         );
 
-        hint.setTextColor(MUTED);
-        hint.setTextSize(12);
-        hint.setGravity(Gravity.CENTER);
+        demo.setTextColor(MUTED);
+        demo.setTextSize(12);
+        demo.setGravity(Gravity.CENTER);
 
-        root.addView(
-                hint,
+        layout.addView(
+                demo,
                 new LinearLayout.LayoutParams(
                         -1,
                         dp(40)
@@ -233,11 +243,11 @@ public class MainActivity extends Activity {
             }
         });
 
-        setContentView(root);
+        setContentView(layout);
     }
 
     // ============================================================
-    // Vault
+    // VAULT
     // ============================================================
 
     private void showVault() {
@@ -251,7 +261,8 @@ public class MainActivity extends Activity {
 
         root.setBackgroundColor(BG);
 
-        // Header
+        // ---------------- HEADER ----------------
+
         LinearLayout header =
                 new LinearLayout(this);
 
@@ -262,7 +273,7 @@ public class MainActivity extends Activity {
         header.setPadding(
                 dp(16),
                 dp(10),
-                dp(16),
+                dp(10),
                 dp(10)
         );
 
@@ -274,6 +285,7 @@ public class MainActivity extends Activity {
         title.setText("🔐 PhotoVault");
         title.setTextColor(TEXT);
         title.setTextSize(21);
+
         title.setTypeface(
                 Typeface.DEFAULT,
                 Typeface.BOLD
@@ -291,7 +303,8 @@ public class MainActivity extends Activity {
         Button lock =
                 new Button(this);
 
-        lock.setText("🔒 قفل");
+        lock.setText("🔒");
+        lock.setTextSize(18);
         lock.setAllCaps(false);
 
         lock.setOnClickListener(
@@ -301,8 +314,8 @@ public class MainActivity extends Activity {
         header.addView(
                 lock,
                 new LinearLayout.LayoutParams(
-                        -2,
-                        dp(45)
+                        dp(55),
+                        dp(50)
                 )
         );
 
@@ -314,25 +327,90 @@ public class MainActivity extends Activity {
                 )
         );
 
-        // Scroll
+        // ---------------- TABS ----------------
+
+        LinearLayout tabs =
+                new LinearLayout(this);
+
+        tabs.setPadding(
+                dp(10),
+                dp(10),
+                dp(10),
+                dp(5)
+        );
+
+        Button photos =
+                new Button(this);
+
+        photos.setText("🖼️ الصور");
+        photos.setAllCaps(false);
+
+        Button videos =
+                new Button(this);
+
+        videos.setText("🎥 الفيديوهات");
+        videos.setAllCaps(false);
+
+        tabs.addView(
+                photos,
+                new LinearLayout.LayoutParams(
+                        0,
+                        dp(50),
+                        1
+                )
+        );
+
+        tabs.addView(
+                videos,
+                new LinearLayout.LayoutParams(
+                        0,
+                        dp(50),
+                        1
+                )
+        );
+
+        root.addView(
+                tabs,
+                new LinearLayout.LayoutParams(
+                        -1,
+                        -2
+                )
+        );
+
+        photos.setOnClickListener(v -> {
+
+            currentTab = 0;
+            refreshGallery();
+        });
+
+        videos.setOnClickListener(v -> {
+
+            currentTab = 1;
+            refreshGallery();
+        });
+
+        // ---------------- SCROLL ----------------
+
         ScrollView scroll =
                 new ScrollView(this);
 
-        content =
+        galleryContainer =
                 new LinearLayout(this);
 
-        content.setOrientation(
+        galleryContainer.setOrientation(
                 LinearLayout.VERTICAL
         );
 
-        content.setPadding(
-                dp(16),
-                dp(16),
-                dp(16),
-                dp(30)
+        galleryContainer.setPadding(
+                dp(10),
+                dp(5),
+                dp(10),
+                dp(100)
         );
 
-        scroll.addView(content);
+        scroll.addView(
+                galleryContainer
+        );
 
         root.addView(
                 scroll,
@@ -343,7 +421,8 @@ public class MainActivity extends Activity {
                 )
         );
 
-        // Add button
+        // ---------------- ADD ----------------
+
         Button add =
                 new Button(this);
 
@@ -355,13 +434,12 @@ public class MainActivity extends Activity {
         add.setTextSize(16);
         add.setAllCaps(false);
 
-        android.graphics.drawable.GradientDrawable addBg =
-                new android.graphics.drawable.GradientDrawable();
-
-        addBg.setColor(PRIMARY);
-        addBg.setCornerRadius(dp(14));
-
-        add.setBackground(addBg);
+        add.setBackground(
+                roundedBackground(
+                        PRIMARY,
+                        15
+                )
+        );
 
         add.setOnClickListener(
                 v -> openGallery()
@@ -375,292 +453,65 @@ public class MainActivity extends Activity {
 
         addParams.setMargins(
                 dp(12),
-                dp(8),
+                dp(5),
                 dp(12),
-                dp(12)
+                dp(10)
         );
 
-        root.addView(add, addParams);
+        root.addView(
+                add,
+                addParams
+        );
 
         setContentView(root);
 
-        refreshVault();
+        refreshGallery();
     }
 
     // ============================================================
-    // Gallery
+    // GALLERY
     // ============================================================
 
-    private void openGallery() {
+    private void refreshGallery() {
 
-        Intent intent =
-                new Intent(
-                        Intent.ACTION_OPEN_DOCUMENT
-                );
-
-        intent.setType("*/*");
-
-        String[] types = {
-                "image/*",
-                "video/*"
-        };
-
-        intent.putExtra(
-                Intent.EXTRA_MIME_TYPES,
-                types
-        );
-
-        intent.putExtra(
-                Intent.EXTRA_ALLOW_MULTIPLE,
-                true
-        );
-
-        intent.addCategory(
-                Intent.CATEGORY_OPENABLE
-        );
-
-        startActivityForResult(
-                intent,
-                PICK_MEDIA
-        );
-    }
-
-    // ============================================================
-    // Result
-    // ============================================================
-
-    @Override
-    protected void onActivityResult(
-            int requestCode,
-            int resultCode,
-            Intent data
-    ) {
-
-        super.onActivityResult(
-                requestCode,
-                resultCode,
-                data
-        );
-
-        if (requestCode != PICK_MEDIA ||
-                resultCode != RESULT_OK ||
-                data == null) {
-
+        if (galleryContainer == null) {
             return;
         }
 
-        int count = 0;
+        loadVault();
 
-        try {
+        galleryContainer.removeAllViews();
 
-            if (data.getClipData() != null) {
+        ArrayList<VaultItem> filtered =
+                new ArrayList<>();
 
-                count =
-                        data.getClipData()
-                                .getItemCount();
+        for (VaultItem item : vaultItems) {
 
-                for (int i = 0;
-                     i < count;
-                     i++) {
+            if (currentTab == 0 &&
+                    !item.video) {
 
-                    Uri uri =
-                            data.getClipData()
-                                    .getItemAt(i)
-                                    .getUri();
+                filtered.add(item);
 
-                    copyToVault(uri);
-                }
+            } else if (currentTab == 1 &&
+                    item.video) {
 
-            } else if (data.getData() != null) {
-
-                count = 1;
-
-                copyToVault(
-                        data.getData()
-                );
-            }
-
-            refreshVault();
-
-            Toast.makeText(
-                    this,
-                    "تمت إضافة " + count + " ملف",
-                    Toast.LENGTH_SHORT
-            ).show();
-
-        } catch (Exception e) {
-
-            Toast.makeText(
-                    this,
-                    "حدث خطأ: " +
-                            e.getMessage(),
-                    Toast.LENGTH_LONG
-            ).show();
-        }
-    }
-
-    // ============================================================
-    // Copy file
-    // ============================================================
-
-    private void copyToVault(Uri uri)
-            throws Exception {
-
-        File vault =
-                new File(
-                        getFilesDir(),
-                        "vault"
-                );
-
-        if (!vault.exists()) {
-            vault.mkdirs();
-        }
-
-        String extension =
-                getExtension(uri);
-
-        String timestamp =
-                new SimpleDateFormat(
-                        "yyyyMMdd_HHmmss_SSS",
-                        Locale.US
-                ).format(new Date());
-
-        String name =
-                "vault_" +
-                timestamp +
-                extension;
-
-        File destination =
-                new File(vault, name);
-
-        InputStream input =
-                getContentResolver()
-                        .openInputStream(uri);
-
-        if (input == null) {
-            throw new Exception(
-                    "تعذر قراءة الملف"
-            );
-        }
-
-        FileOutputStream output =
-                new FileOutputStream(
-                        destination
-                );
-
-        byte[] buffer =
-                new byte[8192];
-
-        int length;
-
-        while ((length =
-                input.read(buffer)) > 0) {
-
-            output.write(
-                    buffer,
-                    0,
-                    length
-            );
-        }
-
-        output.flush();
-        output.close();
-        input.close();
-    }
-
-    // ============================================================
-    // Extension
-    // ============================================================
-
-    private String getExtension(Uri uri) {
-
-        String type =
-                getContentResolver()
-                        .getType(uri);
-
-        if (type == null) {
-            return ".dat";
-        }
-
-        if (type.equals("image/jpeg")) {
-            return ".jpg";
-        }
-
-        if (type.equals("image/png")) {
-            return ".png";
-        }
-
-        if (type.equals("image/webp")) {
-            return ".webp";
-        }
-
-        if (type.equals("video/mp4")) {
-            return ".mp4";
-        }
-
-        if (type.equals("video/webm")) {
-            return ".webm";
-        }
-
-        return ".dat";
-    }
-
-    // ============================================================
-    // Load files
-    // ============================================================
-
-    private void loadFiles() {
-
-        vaultFiles.clear();
-
-        File vault =
-                new File(
-                        getFilesDir(),
-                        "vault"
-                );
-
-        if (!vault.exists()) {
-            vault.mkdirs();
-        }
-
-        File[] files =
-                vault.listFiles();
-
-        if (files != null) {
-
-            for (File file : files) {
-
-                if (file.isFile()) {
-                    vaultFiles.add(file);
-                }
+                filtered.add(item);
             }
         }
-    }
-
-    // ============================================================
-    // Refresh vault
-    // ============================================================
-
-    private void refreshVault() {
-
-        if (content == null) {
-            return;
-        }
-
-        loadFiles();
-
-        content.removeAllViews();
 
         TextView count =
                 new TextView(this);
 
         count.setText(
-                "🔒 الملفات داخل الخزنة: " +
-                        vaultFiles.size()
+                (currentTab == 0
+                        ? "🖼️ الصور: "
+                        : "🎥 الفيديوهات: ")
+                        + filtered.size()
         );
 
         count.setTextColor(TEXT);
         count.setTextSize(17);
+
         count.setTypeface(
                 Typeface.DEFAULT,
                 Typeface.BOLD
@@ -668,166 +519,318 @@ public class MainActivity extends Activity {
 
         count.setPadding(
                 dp(5),
-                dp(10),
+                dp(8),
                 dp(5),
-                dp(15)
+                dp(12)
         );
 
-        content.addView(count);
+        galleryContainer.addView(count);
 
-        if (vaultFiles.isEmpty()) {
+        if (filtered.isEmpty()) {
 
             TextView empty =
                     new TextView(this);
 
             empty.setText(
-                    "الخزنة فارغة\n\n" +
-                    "أضف صورًا أو فيديوهات للبدء."
+                    currentTab == 0
+                            ? "لا توجد صور في الخزنة\n\nاضغط + لإضافة صور"
+                            : "لا توجد فيديوهات في الخزنة\n\nاضغط + لإضافة فيديوهات"
             );
 
             empty.setTextColor(MUTED);
             empty.setTextSize(16);
-            empty.setGravity(
-                    Gravity.CENTER
-            );
+            empty.setGravity(Gravity.CENTER);
 
-            content.addView(
+            galleryContainer.addView(
                     empty,
                     new LinearLayout.LayoutParams(
                             -1,
-                            dp(180)
+                            dp(200)
                     )
             );
 
             return;
         }
 
-        for (File file : vaultFiles) {
+        GridLayout grid =
+                new GridLayout(this);
 
-            addFileItem(file);
+        grid.setColumnCount(3);
+
+        galleryContainer.addView(
+                grid,
+                new LinearLayout.LayoutParams(
+                        -1,
+                        -2
+                )
+        );
+
+        for (VaultItem item : filtered) {
+
+            addThumbnail(
+                    grid,
+                    item
+            );
         }
     }
 
     // ============================================================
-    // File item
+    // THUMBNAIL
     // ============================================================
 
-    private void addFileItem(File file) {
+    private void addThumbnail(
+            GridLayout grid,
+            VaultItem item
+    ) {
 
-        LinearLayout item =
+        LinearLayout card =
                 new LinearLayout(this);
 
-        item.setGravity(
-                Gravity.CENTER_VERTICAL
+        card.setOrientation(
+                LinearLayout.VERTICAL
         );
 
-        item.setPadding(
-                dp(14),
-                dp(8),
-                dp(8),
-                dp(8)
+        card.setGravity(
+                Gravity.CENTER
         );
 
-        android.graphics.drawable.GradientDrawable itemBg =
-                new android.graphics.drawable.GradientDrawable();
+        ImageView image =
+                new ImageView(this);
 
-        itemBg.setColor(SURFACE);
-        itemBg.setCornerRadius(dp(12));
-
-        item.setBackground(itemBg);
-
-        TextView info =
-                new TextView(this);
-
-        String name =
-                file.getName();
-
-        info.setText(
-                "🔒  " + name
+        image.setScaleType(
+                ImageView.ScaleType.CENTER_CROP
         );
 
-        info.setTextColor(TEXT);
-        info.setTextSize(14);
+        File file = item.file;
 
-        item.addView(
-                info,
-                new LinearLayout.LayoutParams(
-                        0,
-                        dp(55),
-                        1
+        if (item.video) {
+
+            android.graphics.Bitmap thumbnail =
+                    ThumbnailUtils.createVideoThumbnail(
+                            file.getAbsolutePath(),
+                            MediaStore.Video.Thumbnails.MINI_KIND
+                    );
+
+            if (thumbnail != null) {
+
+                image.setImageBitmap(
+                        thumbnail
+                );
+
+            } else {
+
+                image.setImageResource(
+                        android.R.drawable.ic_media_play
+                );
+            }
+
+        } else {
+
+            image.setImageURI(
+                    Uri.fromFile(file)
+            );
+        }
+
+        android.widget.FrameLayout frame =
+                new android.widget.FrameLayout(this);
+
+        frame.addView(
+                image,
+                new android.widget.FrameLayout.LayoutParams(
+                        -1,
+                        dp(105)
                 )
         );
 
-        Button delete =
-                new Button(this);
+        if (item.video) {
 
-        delete.setText("حذف");
-        delete.setTextColor(Color.WHITE);
-        delete.setAllCaps(false);
+            TextView play =
+                    new TextView(this);
 
-        android.graphics.drawable.GradientDrawable deleteBg =
-                new android.graphics.drawable.GradientDrawable();
+            play.setText("▶");
+            play.setTextColor(Color.WHITE);
+            play.setTextSize(30);
+            play.setGravity(
+                    Gravity.CENTER
+            );
 
-        deleteBg.setColor(DANGER);
-        deleteBg.setCornerRadius(dp(10));
+            frame.addView(
+                    play,
+                    new android.widget.FrameLayout.LayoutParams(
+                            -1,
+                            dp(105)
+                    )
+            );
+        }
 
-        delete.setBackground(deleteBg);
-
-        delete.setOnClickListener(
-                v -> deleteFile(file)
-        );
-
-        item.addView(
-                delete,
-                new LinearLayout.LayoutParams(
-                        dp(70),
-                        dp(45)
-                )
-        );
-
-        LinearLayout.LayoutParams params =
+        card.addView(
+                frame,
                 new LinearLayout.LayoutParams(
                         -1,
-                        dp(70)
+                        dp(105)
+                )
+        );
+
+        TextView name =
+                new TextView(this);
+
+        name.setText(
+                item.file.getName()
+        );
+
+        name.setTextColor(MUTED);
+        name.setTextSize(9);
+        name.setGravity(
+                Gravity.CENTER
+        );
+
+        card.addView(
+                name,
+                new LinearLayout.LayoutParams(
+                        -1,
+                        dp(28)
+                )
+        );
+
+        card.setOnClickListener(
+                v -> showFileMenu(item)
+        );
+
+        GridLayout.LayoutParams params =
+                new GridLayout.LayoutParams();
+
+        params.width = 0;
+        params.height = dp(140);
+
+        params.columnSpec =
+                GridLayout.spec(
+                        GridLayout.UNDEFINED,
+                        1f
                 );
 
         params.setMargins(
-                0,
-                dp(5),
-                0,
-                dp(5)
+                dp(3),
+                dp(3),
+                dp(3),
+                dp(3)
         );
 
-        content.addView(
-                item,
+        grid.addView(
+                card,
                 params
         );
     }
 
     // ============================================================
-    // Delete
+    // FILE MENU
     // ============================================================
 
-    private void deleteFile(File file) {
+    private void showFileMenu(
+            VaultItem item
+    ) {
 
-        if (file.exists() &&
-                file.delete()) {
+        String[] options = {
+                "فتح",
+                "حذف من الخزنة"
+        };
 
-            Toast.makeText(
-                    this,
-                    "تم حذف الملف من الخزنة",
-                    Toast.LENGTH_SHORT
-            ).show();
+        new AlertDialog.Builder(this)
+                .setTitle(
+                        item.video
+                                ? "🎥 الفيديو"
+                                : "🖼️ الصورة"
+                )
+                .setItems(
+                        options,
+                        (dialog, which) -> {
 
-            refreshVault();
+                            if (which == 0) {
 
-        } else {
+                                openFile(item);
 
-            Toast.makeText(
-                    this,
-                    "تعذر حذف الملف",
-                    Toast.LENGTH_SHORT
-            ).show();
-        }
+                            } else {
+
+                                deleteVaultFile(item);
+                            }
+                        }
+                )
+                .show();
     }
-}
+
+    // ============================================================
+    // OPEN
+    // ============================================================
+
+    private void openFile(
+            VaultItem item
+    ) {
+
+        Intent intent =
+                new Intent(
+                        Intent.ACTION_VIEW
+                );
+
+        Uri uri =
+                Uri.parse(
+                        "content://com.aichat.app.vault/"
+                                + Uri.encode(
+                                item.file.getName()
+                        )
+                );
+
+        /*
+         * في هذه المرحلة نفتح الملف بواسطة
+         * FileProvider.
+         *
+         * إذا أردنا تشغيل الفيديو والصور
+         * داخل التطبيق نفسه، سنضيف شاشة Viewer
+         * في الخطوة التالية.
+         */
+
+        Toast.makeText(
+                this,
+                "سيتم إضافة شاشة العرض الداخلية لاحقًا",
+                Toast.LENGTH_SHORT
+        ).show();
+    }
+
+    // ============================================================
+    // DELETE FROM VAULT
+    // ============================================================
+
+    private void deleteVaultFile(
+            VaultItem item
+    ) {
+
+        new AlertDialog.Builder(this)
+                .setTitle("حذف الملف")
+                .setMessage(
+                        "هل تريد حذف هذا الملف نهائيًا من الخزنة؟"
+                )
+                .setPositiveButton(
+                        "حذف",
+                        (dialog, which) -> {
+
+                            if (item.file.delete()) {
+
+                                Toast.makeText(
+                                        this,
+                                        "تم حذف الملف من الخزنة",
+                                        Toast.LENGTH_SHORT
+                                ).show();
+
+                                refreshGallery();
+
+                            } else {
+
+                                Toast.makeText(
+                                        this,
+                                        "تعذر حذف الملف",
+                                        Toast.LENGTH_SHORT
+                                ).show();
+                            }
+                        }
+                )
+                .setNegativeButton(
+                        "إلغاء",
+                        

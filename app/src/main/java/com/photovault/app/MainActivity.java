@@ -2,6 +2,7 @@ package com.photovault.app;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -13,6 +14,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
@@ -30,12 +32,16 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.Locale;
 
 public class MainActivity extends Activity {
 
-    private static final int PICK_MEDIA = 100;
-    private static final int DELETE_MEDIA = 200;
+    private static final int PICK_PHOTOS = 101;
+    private static final int PICK_VIDEOS = 102;
+    private static final int DELETE_REQUEST = 103;
 
     private static final String PIN = "1234";
 
@@ -43,8 +49,8 @@ public class MainActivity extends Activity {
     private final int SURFACE = Color.rgb(22, 27, 34);
     private final int SURFACE_ALT = Color.rgb(33, 38, 45);
     private final int PRIMARY = Color.rgb(31, 111, 235);
+    private final int GREEN = Color.rgb(35, 134, 54);
     private final int DANGER = Color.rgb(218, 54, 51);
-    private final int SUCCESS = Color.rgb(35, 134, 54);
     private final int TEXT = Color.rgb(230, 237, 243);
     private final int MUTED = Color.rgb(139, 148, 158);
 
@@ -194,8 +200,6 @@ public class MainActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BG);
 
-        // HEADER
-
         LinearLayout header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(
@@ -210,18 +214,11 @@ public class MainActivity extends Activity {
         title.setText("🔐 PhotoVault");
         title.setTextColor(TEXT);
         title.setTextSize(21);
-        title.setTypeface(
-                Typeface.DEFAULT,
-                Typeface.BOLD
-        );
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
 
         header.addView(
                 title,
-                new LinearLayout.LayoutParams(
-                        0,
-                        -2,
-                        1
-                )
+                new LinearLayout.LayoutParams(0, -2, 1)
         );
 
         Button lock = new Button(this);
@@ -244,10 +241,11 @@ public class MainActivity extends Activity {
                 new LinearLayout.LayoutParams(-1, -2)
         );
 
+        // ========================================================
         // TABS
+        // ========================================================
 
         LinearLayout tabs = new LinearLayout(this);
-
         tabs.setPadding(
                 dp(10),
                 dp(8),
@@ -296,7 +294,9 @@ public class MainActivity extends Activity {
             refreshGallery();
         });
 
-        // SCROLL
+        // ========================================================
+        // GALLERY
+        // ========================================================
 
         ScrollView scroll = new ScrollView(this);
 
@@ -323,7 +323,9 @@ public class MainActivity extends Activity {
                 )
         );
 
+        // ========================================================
         // ADD BUTTON
+        // ========================================================
 
         Button add = new Button(this);
         add.setText("＋ إضافة صور وفيديوهات");
@@ -334,7 +336,7 @@ public class MainActivity extends Activity {
                 roundedBackground(PRIMARY, 15)
         );
 
-        add.setOnClickListener(v -> openGallery());
+        add.setOnClickListener(v -> showAddMenu());
 
         LinearLayout.LayoutParams addParams =
                 new LinearLayout.LayoutParams(
@@ -357,49 +359,91 @@ public class MainActivity extends Activity {
     }
 
     // ============================================================
-    // OPEN GALLERY
+    // ADD MENU
     // ============================================================
 
-    private void openGallery() {
+    private void showAddMenu() {
+
+        String[] options = {
+                "🖼️ اختيار الصور",
+                "🎥 اختيار الفيديوهات"
+        };
+
+        new AlertDialog.Builder(this)
+                .setTitle("إضافة إلى الخزنة")
+                .setItems(options, (dialog, which) -> {
+
+                    if (which == 0) {
+                        openPhotoPicker();
+                    } else {
+                        openVideoPicker();
+                    }
+                })
+                .show();
+    }
+
+    // ============================================================
+    // PHOTO PICKER
+    // ============================================================
+
+    private void openPhotoPicker() {
 
         Intent intent = new Intent(
-                Intent.ACTION_GET_CONTENT
-        );
-
-        intent.setType("*/*");
-
-        intent.putExtra(
-                Intent.EXTRA_MIME_TYPES,
-                new String[]{
-                        "image/*",
-                        "video/*"
-                }
-        );
-
-        intent.putExtra(
-                Intent.EXTRA_ALLOW_MULTIPLE,
-                true
+                Intent.ACTION_OPEN_DOCUMENT
         );
 
         intent.addCategory(
                 Intent.CATEGORY_OPENABLE
         );
 
-        try {
-            startActivityForResult(
-                    Intent.createChooser(
-                            intent,
-                            "اختر الصور والفيديوهات"
-                    ),
-                    PICK_MEDIA
-            );
-        } catch (Exception e) {
-            Toast.makeText(
-                    this,
-                    "تعذر فتح معرض الصور",
-                    Toast.LENGTH_LONG
-            ).show();
-        }
+        intent.setType("image/*");
+
+        intent.putExtra(
+                Intent.EXTRA_ALLOW_MULTIPLE,
+                true
+        );
+
+        intent.addFlags(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+        );
+
+        startActivityForResult(
+                intent,
+                PICK_PHOTOS
+        );
+    }
+
+    // ============================================================
+    // VIDEO PICKER
+    // ============================================================
+
+    private void openVideoPicker() {
+
+        Intent intent = new Intent(
+                Intent.ACTION_OPEN_DOCUMENT
+        );
+
+        intent.addCategory(
+                Intent.CATEGORY_OPENABLE
+        );
+
+        intent.setType("video/*");
+
+        intent.putExtra(
+                Intent.EXTRA_ALLOW_MULTIPLE,
+                true
+        );
+
+        intent.addFlags(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+        );
+
+        startActivityForResult(
+                intent,
+                PICK_VIDEOS
+        );
     }
 
     // ============================================================
@@ -412,15 +456,20 @@ public class MainActivity extends Activity {
             int resultCode,
             Intent data
     ) {
+
         super.onActivityResult(
                 requestCode,
                 resultCode,
                 data
         );
 
-        if (requestCode == PICK_MEDIA &&
-                resultCode == RESULT_OK &&
-                data != null) {
+        if (resultCode != RESULT_OK ||
+                data == null) {
+            return;
+        }
+
+        if (requestCode == PICK_PHOTOS ||
+                requestCode == PICK_VIDEOS) {
 
             ArrayList<Uri> uris =
                     new ArrayList<>();
@@ -432,12 +481,11 @@ public class MainActivity extends Activity {
 
                 for (int i = 0; i < count; i++) {
 
-                    Uri uri =
+                    uris.add(
                             data.getClipData()
                                     .getItemAt(i)
-                                    .getUri();
-
-                    uris.add(uri);
+                                    .getUri()
+                    );
                 }
 
             } else if (data.getData() != null) {
@@ -445,32 +493,32 @@ public class MainActivity extends Activity {
                 uris.add(data.getData());
             }
 
-            if (!uris.isEmpty()) {
+            boolean video =
+                    requestCode == PICK_VIDEOS;
 
-                importMedia(uris);
-            }
+            importFiles(uris, video);
         }
 
-        if (requestCode == DELETE_MEDIA &&
-                resultCode == RESULT_OK) {
+        if (requestCode == DELETE_REQUEST) {
 
-            pendingDeleteUris.clear();
-
-            Toast.makeText(
-                    this,
-                    "✅ تم حذف الملفات الأصلية من الهاتف",
-                    Toast.LENGTH_SHORT
-            ).show();
+            completePendingDeletes();
         }
     }
 
     // ============================================================
-    // IMPORT MEDIA
+    // IMPORT
     // ============================================================
 
-    private void importMedia(
-            ArrayList<Uri> uris
+    private void importFiles(
+            ArrayList<Uri> uris,
+            boolean video
     ) {
+
+        if (uris.isEmpty()) {
+            return;
+        }
+
+        pendingDeleteUris.clear();
 
         int imported = 0;
 
@@ -478,185 +526,188 @@ public class MainActivity extends Activity {
 
             try {
 
-                String mime =
-                        getContentResolver()
-                                .getType(uri);
+                String fileName =
+                        createVaultFileName(uri, video);
 
-                boolean isVideo =
-                        mime != null &&
-                        mime.startsWith("video");
-
-                File vaultDir =
+                File destination =
                         new File(
                                 getFilesDir(),
                                 "vault"
                         );
 
-                if (!vaultDir.exists()) {
-                    vaultDir.mkdirs();
+                if (!destination.exists()) {
+                    destination.mkdirs();
                 }
 
-                String extension =
-                        getExtension(mime, isVideo);
-
-                String name =
-                        "vault_" +
-                        System.currentTimeMillis() +
-                        "_" +
-                        imported +
-                        extension;
-
-                File destination =
+                File target =
                         new File(
-                                vaultDir,
-                                name
+                                destination,
+                                fileName
                         );
 
-                copyUriToFile(
-                        uri,
-                        destination
+                copyUriToFile(uri, target);
+
+                vaultItems.add(
+                        new VaultItem(
+                                target,
+                                video,
+                                uri.toString()
+                        )
                 );
 
-                if (destination.exists() &&
-                        destination.length() > 0) {
+                saveVaultIndex();
 
-                    imported++;
+                pendingDeleteUris.add(uri);
 
-                    /*
-                     * نحاول حذف الأصل من الهاتف.
-                     */
-                    boolean deleted =
-                            deleteOriginal(uri);
-
-                    if (!deleted &&
-                            Build.VERSION.SDK_INT >=
-                                    Build.VERSION_CODES.R) {
-
-                        pendingDeleteUris.add(uri);
-                    }
-                }
+                imported++;
 
             } catch (Exception e) {
 
-                e.printStackTrace();
+                Toast.makeText(
+                        this,
+                        "تعذر إخفاء ملف: " +
+                                e.getMessage(),
+                        Toast.LENGTH_LONG
+                ).show();
             }
         }
 
+        saveVaultIndex();
+
         refreshGallery();
 
-        if (imported > 0) {
+        if (pendingDeleteUris.isEmpty()) {
 
             Toast.makeText(
                     this,
-                    "✅ تمت إضافة " +
-                    imported +
-                    " ملف إلى الخزنة",
-                    Toast.LENGTH_LONG
+                    "تمت الإضافة إلى الخزنة",
+                    Toast.LENGTH_SHORT
             ).show();
 
-        } else {
-
-            Toast.makeText(
-                    this,
-                    "تعذر إضافة الملفات",
-                    Toast.LENGTH_LONG
-            ).show();
-        }
-
-        /*
-         * Android 11+
-         * يطلب من المستخدم تأكيد حذف
-         * الملفات الأصلية.
-         */
-        if (!pendingDeleteUris.isEmpty() &&
-                Build.VERSION.SDK_INT >=
-                        Build.VERSION_CODES.R) {
-
-            requestDeletePermission();
-        }
-    }
-
-    // ============================================================
-    // DELETE ORIGINAL
-    // ============================================================
-
-    private boolean deleteOriginal(Uri uri) {
-
-        try {
-
-            int deleted =
-                    getContentResolver()
-                            .delete(uri, null, null);
-
-            return deleted > 0;
-
-        } catch (Exception e) {
-
-            return false;
-        }
-    }
-
-    // ============================================================
-    // REQUEST DELETE
-    // ============================================================
-
-    private void requestDeletePermission() {
-
-        if (Build.VERSION.SDK_INT <
-                Build.VERSION_CODES.R) {
             return;
         }
 
-        try {
+        // Android 11+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
 
-            IntentSenderWrapper wrapper =
-                    new IntentSenderWrapper();
+            try {
 
-            wrapper.start(
-                    pendingDeleteUris
-            );
+                Intent deleteIntent =
+                        MediaStore.createDeleteRequest(
+                                getContentResolver(),
+                                pendingDeleteUris
+                        );
 
-        } catch (Exception e) {
+                startIntentSenderForResult(
+                        deleteIntent.getIntentSender(),
+                        DELETE_REQUEST,
+                        null,
+                        0,
+                        0,
+                        0
+                );
 
-            Toast.makeText(
-                    this,
-                    "تم نقل الملفات للخزنة، لكن يجب السماح بحذف الأصل",
-                    Toast.LENGTH_LONG
-            ).show();
+            } catch (Exception e) {
+
+                Toast.makeText(
+                        this,
+                        "تم نسخ الملفات إلى الخزنة، " +
+                                "لكن تعذر طلب حذف النسخ الأصلية.",
+                        Toast.LENGTH_LONG
+                ).show();
+            }
+
+        } else {
+
+            deleteOldAndroidVersions();
+
         }
     }
 
     // ============================================================
-    // COPY URI TO PRIVATE FILE
+    // DELETE OLD ANDROID
+    // ============================================================
+
+    private void deleteOldAndroidVersions() {
+
+        int deleted = 0;
+
+        for (Uri uri : pendingDeleteUris) {
+
+            try {
+
+                int result =
+                        getContentResolver()
+                                .delete(
+                                        uri,
+                                        null,
+                                        null
+                                );
+
+                if (result > 0) {
+                    deleted++;
+                }
+
+            } catch (Exception ignored) {
+            }
+        }
+
+        pendingDeleteUris.clear();
+
+        Toast.makeText(
+                this,
+                "تم إخفاء " + deleted + " ملف",
+                Toast.LENGTH_LONG
+        ).show();
+    }
+
+    // ============================================================
+    // AFTER USER CONFIRMS DELETE
+    // ============================================================
+
+    private void completePendingDeletes() {
+
+        Toast.makeText(
+                this,
+                "✅ تم إخفاء الملفات من معرض الهاتف",
+                Toast.LENGTH_LONG
+        ).show();
+
+        pendingDeleteUris.clear();
+
+        refreshGallery();
+    }
+
+    // ============================================================
+    // COPY URI -> FILE
     // ============================================================
 
     private void copyUriToFile(
             Uri uri,
-            File destination
+            File target
     ) throws Exception {
 
+        ContentResolver resolver =
+                getContentResolver();
+
         InputStream input =
-                getContentResolver()
-                        .openInputStream(uri);
+                resolver.openInputStream(uri);
 
         if (input == null) {
             throw new Exception(
-                    "Cannot open file"
+                    "تعذر فتح الملف"
             );
         }
 
         FileOutputStream output =
-                new FileOutputStream(
-                        destination
-                );
+                new FileOutputStream(target);
 
         byte[] buffer =
                 new byte[8192];
 
         int length;
 
-        while ((length =
-                input.read(buffer)) != -1) {
+        while ((length = input.read(buffer)) != -1) {
 
             output.write(
                     buffer,
@@ -668,6 +719,31 @@ public class MainActivity extends Activity {
         output.flush();
         output.close();
         input.close();
+    }
+
+    // ============================================================
+    // FILE NAME
+    // ============================================================
+
+    private String createVaultFileName(
+            Uri uri,
+            boolean video
+    ) {
+
+        String extension =
+                video ? ".mp4" : ".jpg";
+
+        String time =
+                new SimpleDateFormat(
+                        "yyyyMMdd_HHmmss_SSS",
+                        Locale.US
+                ).format(new Date());
+
+        return "vault_" +
+                time +
+                "_" +
+                System.nanoTime() +
+                extension;
     }
 
     // ============================================================
@@ -768,64 +844,7 @@ public class MainActivity extends Activity {
         );
 
         for (VaultItem item : filtered) {
-
-            addThumbnail(
-                    grid,
-                    item
-            );
-        }
-    }
-
-    // ============================================================
-    // LOAD VAULT
-    // ============================================================
-
-    private void loadVault() {
-
-        vaultItems.clear();
-
-        File vaultDir =
-                new File(
-                        getFilesDir(),
-                        "vault"
-                );
-
-        if (!vaultDir.exists()) {
-            vaultDir.mkdirs();
-            return;
-        }
-
-        File[] files =
-                vaultDir.listFiles();
-
-        if (files == null) {
-            return;
-        }
-
-        for (File file : files) {
-
-            if (!file.isFile()) {
-                continue;
-            }
-
-            String name =
-                    file.getName()
-                            .toLowerCase();
-
-            boolean video =
-                    name.endsWith(".mp4") ||
-                    name.endsWith(".3gp") ||
-                    name.endsWith(".mkv") ||
-                    name.endsWith(".webm") ||
-                    name.endsWith(".avi") ||
-                    name.endsWith(".mov");
-
-            vaultItems.add(
-                    new VaultItem(
-                            file,
-                            video
-                    )
-            );
+            addThumbnail(grid, item);
         }
     }
 
@@ -856,12 +875,13 @@ public class MainActivity extends Activity {
                 dp(3)
         );
 
-        card.setBackground(
-                roundedBackground(
-                        SURFACE,
-                        10
-                )
-        );
+        android.graphics.drawable.GradientDrawable cardBg =
+                new android.graphics.drawable.GradientDrawable();
+
+        cardBg.setColor(SURFACE);
+        cardBg.setCornerRadius(dp(10));
+
+        card.setBackground(cardBg);
 
         ImageView image =
                 new ImageView(this);
@@ -995,7 +1015,7 @@ public class MainActivity extends Activity {
         String[] options = {
                 "فتح",
                 "إرجاع إلى الهاتف",
-                "حذف نهائي"
+                "حذف نهائياً"
         };
 
         new AlertDialog.Builder(this)
@@ -1018,7 +1038,7 @@ public class MainActivity extends Activity {
 
                             } else {
 
-                                deletePermanently(item);
+                                deleteVaultFile(item);
                             }
                         }
                 )
@@ -1035,14 +1055,12 @@ public class MainActivity extends Activity {
 
         try {
 
+            Uri uri =
+                    Uri.fromFile(item.file);
+
             Intent intent =
                     new Intent(
                             Intent.ACTION_VIEW
-                    );
-
-            Uri uri =
-                    Uri.fromFile(
-                            item.file
                     );
 
             intent.setDataAndType(
@@ -1069,65 +1087,10 @@ public class MainActivity extends Activity {
     }
 
     // ============================================================
-    // RESTORE FILE
+    // RESTORE TO PHONE
     // ============================================================
 
     private void restoreFile(
-            VaultItem item
-    ) {
-
-        new AlertDialog.Builder(this)
-                .setTitle("إرجاع الملف")
-                .setMessage(
-                        "سيتم إرجاع الملف إلى معرض الهاتف وحذفه من الخزنة."
-                )
-                .setPositiveButton(
-                        "إرجاع",
-                        (dialog, which) -> {
-
-                            if (restoreToGallery(item)) {
-
-                                if (item.file.delete()) {
-
-                                    refreshGallery();
-
-                                    Toast.makeText(
-                                            this,
-                                            "✅ تم إرجاع الملف إلى الهاتف",
-                                            Toast.LENGTH_LONG
-                                    ).show();
-
-                                } else {
-
-                                    Toast.makeText(
-                                            this,
-                                            "تم إرجاع الملف، لكن تعذر حذف نسخة الخزنة",
-                                            Toast.LENGTH_LONG
-                                    ).show();
-                                }
-
-                            } else {
-
-                                Toast.makeText(
-                                        this,
-                                        "❌ تعذر إرجاع الملف",
-                                        Toast.LENGTH_LONG
-                                ).show();
-                            }
-                        }
-                )
-                .setNegativeButton(
-                        "إلغاء",
-                        null
-                )
-                .show();
-    }
-
-    // ============================================================
-    // RESTORE TO GALLERY
-    // ============================================================
-
-    private boolean restoreToGallery(
             VaultItem item
     ) {
 
@@ -1136,16 +1099,28 @@ public class MainActivity extends Activity {
             ContentValues values =
                     new ContentValues();
 
+            String mime =
+                    item.video
+                            ? "video/mp4"
+                            : "image/jpeg";
+
+            String relativePath =
+                    item.video
+                            ? Environment.DIRECTORY_MOVIES +
+                              "/PhotoVault"
+                            : Environment.DIRECTORY_PICTURES +
+                              "/PhotoVault";
+
             values.put(
                     MediaStore.MediaColumns.DISPLAY_NAME,
-                    item.file.getName()
+                    "restored_" +
+                            System.currentTimeMillis() +
+                            (item.video ? ".mp4" : ".jpg")
             );
 
             values.put(
                     MediaStore.MediaColumns.MIME_TYPE,
-                    item.video
-                            ? "video/mp4"
-                            : "image/jpeg"
+                    mime
             );
 
             if (Build.VERSION.SDK_INT >=
@@ -1153,9 +1128,7 @@ public class MainActivity extends Activity {
 
                 values.put(
                         MediaStore.MediaColumns.RELATIVE_PATH,
-                        item.video
-                                ? Environment.DIRECTORY_MOVIES
-                                : Environment.DIRECTORY_PICTURES
+                        relativePath
                 );
             }
 
@@ -1164,29 +1137,33 @@ public class MainActivity extends Activity {
                             ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI
                             : MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
 
-            Uri uri =
+            Uri newUri =
                     getContentResolver()
                             .insert(
                                     collection,
                                     values
                             );
 
-            if (uri == null) {
-                return false;
+            if (newUri == null) {
+
+                throw new Exception(
+                        "تعذر إنشاء الملف"
+                );
             }
 
             OutputStream output =
                     getContentResolver()
-                            .openOutputStream(uri);
+                            .openOutputStream(newUri);
 
             if (output == null) {
-                return false;
+
+                throw new Exception(
+                        "تعذر فتح الملف الجديد"
+                );
             }
 
             FileInputStream input =
-                    new FileInputStream(
-                            item.file
-                    );
+                    new FileInputStream(item.file);
 
             byte[] buffer =
                     new byte[8192];
@@ -1207,51 +1184,64 @@ public class MainActivity extends Activity {
             output.flush();
             output.close();
 
-            return true;
+            // نحذف النسخة من الخزنة بعد نجاح الإرجاع
+            if (item.file.exists()) {
+                item.file.delete();
+            }
+
+            vaultItems.remove(item);
+            saveVaultIndex();
+            refreshGallery();
+
+            Toast.makeText(
+                    this,
+                    "✅ تم إرجاع الملف إلى الهاتف",
+                    Toast.LENGTH_LONG
+            ).show();
 
         } catch (Exception e) {
 
-            e.printStackTrace();
-
-            return false;
+            Toast.makeText(
+                    this,
+                    "خطأ في الإرجاع: " +
+                            e.getMessage(),
+                    Toast.LENGTH_LONG
+            ).show();
         }
     }
 
     // ============================================================
-    // DELETE PERMANENTLY
+    // DELETE FROM VAULT
     // ============================================================
 
-    private void deletePermanently(
+    private void deleteVaultFile(
             VaultItem item
     ) {
 
         new AlertDialog.Builder(this)
                 .setTitle("حذف نهائي")
                 .setMessage(
-                        "هل تريد حذف هذا الملف نهائيًا من الخزنة؟"
+                        "سيتم حذف هذا الملف نهائياً من الخزنة.\n" +
+                        "لن يعود إلى معرض الهاتف."
                 )
                 .setPositiveButton(
                         "حذف",
                         (dialog, which) -> {
 
-                            if (item.file.delete()) {
-
-                                refreshGallery();
-
-                                Toast.makeText(
-                                        this,
-                                        "🗑 تم حذف الملف نهائيًا",
-                                        Toast.LENGTH_SHORT
-                                ).show();
-
-                            } else {
-
-                                Toast.makeText(
-                                        this,
-                                        "تعذر حذف الملف",
-                                        Toast.LENGTH_SHORT
-                                ).show();
+                            if (item.file.exists()) {
+                                item.file.delete();
                             }
+
+                            vaultItems.remove(item);
+                            saveVaultIndex();
+
+                            refreshGallery();
+
+                            Toast.makeText(
+                                    this,
+                                    "تم الحذف نهائياً",
+                                    Toast.LENGTH_SHORT
+                            ).show();
                         }
                 )
                 .setNegativeButton(
@@ -1262,48 +1252,127 @@ public class MainActivity extends Activity {
     }
 
     // ============================================================
-    // EXTENSION
+    // VAULT INDEX
     // ============================================================
 
-    private String getExtension(
-            String mime,
-            boolean video
-    ) {
+    private void saveVaultIndex() {
 
-        if (mime == null) {
+        try {
 
-            return video
-                    ? ".mp4"
-                    : ".jpg";
+            File index =
+                    new File(
+                            getFilesDir(),
+                            "vault_index.txt"
+                    );
+
+            FileOutputStream out =
+                    new FileOutputStream(index);
+
+            for (VaultItem item : vaultItems) {
+
+                String line =
+                        item.file.getName() +
+                        "|" +
+                        item.video +
+                        "|" +
+                        item.originalUri +
+                        "\n";
+
+                out.write(
+                        line.getBytes("UTF-8")
+                );
+            }
+
+            out.close();
+
+        } catch (Exception ignored) {
+        }
+    }
+
+    // ============================================================
+    // LOAD VAULT
+    // ============================================================
+
+    private void loadVault() {
+
+        vaultItems.clear();
+
+        File folder =
+                new File(
+                        getFilesDir(),
+                        "vault"
+                );
+
+        if (!folder.exists()) {
+            folder.mkdirs();
         }
 
-        if (mime.equals("image/png")) {
-            return ".png";
+        File index =
+                new File(
+                        getFilesDir(),
+                        "vault_index.txt"
+                );
+
+        if (!index.exists()) {
+            return;
         }
 
-        if (mime.equals("image/webp")) {
-            return ".webp";
-        }
+        try {
 
-        if (mime.equals("image/gif")) {
-            return ".gif";
-        }
+            java.io.BufferedReader reader =
+                    new java.io.BufferedReader(
+                            new java.io.InputStreamReader(
+                                    new FileInputStream(index),
+                                    "UTF-8"
+                            )
+                    );
 
-        if (mime.equals("video/webm")) {
-            return ".webm";
-        }
+            String line;
 
-        if (mime.equals("video/3gpp")) {
-            return ".3gp";
-        }
+            while ((line =
+                    reader.readLine()) != null) {
 
-        if (mime.equals("video/quicktime")) {
-            return ".mov";
-        }
+                String[] parts =
+                        line.split(
+                                "\\|",
+                                3
+                        );
 
-        return video
-                ? ".mp4"
-                : ".jpg";
+                if (parts.length >= 2) {
+
+                    File file =
+                            new File(
+                                    folder,
+                                    parts[0]
+                            );
+
+                    boolean video =
+                            Boolean.parseBoolean(
+                                    parts[1]
+                            );
+
+                    String originalUri =
+                            parts.length >= 3
+                                    ? parts[2]
+                                    : "";
+
+                    if (file.exists()) {
+
+                        vaultItems.add(
+                                new VaultItem(
+                                        file,
+                                        video,
+                                        originalUri
+                                )
+                        );
+                    }
+                }
+            }
+
+            reader.close();
+
+        } catch (Exception ignored) {
+        }
     }
 
     // ============================================================
@@ -1316,15 +1385,13 @@ public class MainActivity extends Activity {
             int radius
     ) {
 
-        android.graphics.drawable.GradientDrawable drawable =
+        android.graphics.drawable.GradientDrawable bg =
                 new android.graphics.drawable.GradientDrawable();
 
-        drawable.setColor(color);
-        drawable.setCornerRadius(
-                dp(radius)
-        );
+        bg.setColor(color);
+        bg.setCornerRadius(dp(radius));
 
-        return drawable;
+        return bg;
     }
 
     // ============================================================
@@ -1335,48 +1402,17 @@ public class MainActivity extends Activity {
 
         File file;
         boolean video;
+        String originalUri;
 
         VaultItem(
                 File file,
-                boolean video
+                boolean video,
+                String originalUri
         ) {
 
             this.file = file;
             this.video = video;
-        }
-    }
-
-    // ============================================================
-    // DELETE REQUEST WRAPPER
-    // ============================================================
-
-    private class IntentSenderWrapper {
-
-        void start(
-                ArrayList<Uri> uris
-        ) throws Exception {
-
-            if (Build.VERSION.SDK_INT <
-                    Build.VERSION_CODES.R) {
-
-                return;
-            }
-
-            android.app.PendingIntent
-                    pendingIntent =
-                    MediaStore.createDeleteRequest(
-                            getContentResolver(),
-                            uris
-                    );
-
-            startIntentSenderForResult(
-                    pendingIntent.getIntentSender(),
-                    DELETE_MEDIA,
-                    null,
-                    0,
-                    0,
-                    0
-            );
+            this.originalUri = originalUri;
         }
     }
 }

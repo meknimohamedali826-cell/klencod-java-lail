@@ -30,42 +30,63 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
 
+    // ============================================================
+    // CONSTANTS
+    // ============================================================
+
     private static final int PICK_MEDIA = 100;
     private static final int DELETE_MEDIA = 200;
 
     // PIN التجريبي
     private static final String PIN = "1234";
 
+    // الألوان
     private final int BG = Color.rgb(13, 17, 23);
     private final int SURFACE = Color.rgb(22, 27, 34);
+    private final int SURFACE_ALT = Color.rgb(33, 38, 45);
     private final int PRIMARY = Color.rgb(31, 111, 235);
     private final int DANGER = Color.rgb(218, 54, 51);
     private final int TEXT = Color.rgb(230, 237, 243);
     private final int MUTED = Color.rgb(139, 148, 158);
 
+    // واجهة المعرض
     private LinearLayout galleryContainer;
 
+    // الملفات الموجودة داخل الخزنة
     private final ArrayList<VaultItem> vaultItems =
             new ArrayList<>();
 
-    // الملفات الأصلية التي سيتم حذفها من المعرض
+    // الملفات الأصلية التي سيطلب Android حذفها
     private final ArrayList<Uri> pendingDeleteUris =
             new ArrayList<>();
 
+    // 0 = صور
+    // 1 = فيديوهات
     private int currentTab = 0;
-    // 0 = الصور
-    // 1 = الفيديوهات
+
+    // ============================================================
+    // DP
+    // ============================================================
 
     private int dp(int value) {
+
         return Math.round(
-                value * getResources()
+                value *
+                getResources()
                         .getDisplayMetrics()
                         .density
         );
     }
 
+    // ============================================================
+    // ON CREATE
+    // ============================================================
+
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(
+            Bundle savedInstanceState
+    ) {
+
         super.onCreate(savedInstanceState);
 
         getWindow().setStatusBarColor(BG);
@@ -75,37 +96,42 @@ public class MainActivity extends Activity {
     }
 
     // ============================================================
-    // PIN
+    // PIN SCREEN
     // ============================================================
 
     private void showPinScreen() {
 
-        LinearLayout layout =
+        LinearLayout root =
                 new LinearLayout(this);
 
-        layout.setOrientation(
+        root.setOrientation(
                 LinearLayout.VERTICAL
         );
 
-        layout.setGravity(Gravity.CENTER);
+        root.setGravity(
+                Gravity.CENTER
+        );
 
-        layout.setPadding(
+        root.setPadding(
                 dp(30),
                 dp(30),
                 dp(30),
                 dp(30)
         );
 
-        layout.setBackgroundColor(BG);
+        root.setBackgroundColor(BG);
 
+        // أيقونة
         TextView icon =
                 new TextView(this);
 
         icon.setText("🔐");
-        icon.setTextSize(60);
-        icon.setGravity(Gravity.CENTER);
+        icon.setTextSize(58);
+        icon.setGravity(
+                Gravity.CENTER
+        );
 
-        layout.addView(
+        root.addView(
                 icon,
                 new LinearLayout.LayoutParams(
                         -1,
@@ -113,20 +139,23 @@ public class MainActivity extends Activity {
                 )
         );
 
+        // العنوان
         TextView title =
                 new TextView(this);
 
         title.setText("PhotoVault");
         title.setTextColor(TEXT);
         title.setTextSize(30);
-        title.setGravity(Gravity.CENTER);
+        title.setGravity(
+                Gravity.CENTER
+        );
 
         title.setTypeface(
                 Typeface.DEFAULT,
                 Typeface.BOLD
         );
 
-        layout.addView(
+        root.addView(
                 title,
                 new LinearLayout.LayoutParams(
                         -1,
@@ -134,6 +163,7 @@ public class MainActivity extends Activity {
                 )
         );
 
+        // الوصف
         TextView subtitle =
                 new TextView(this);
 
@@ -143,9 +173,11 @@ public class MainActivity extends Activity {
 
         subtitle.setTextColor(MUTED);
         subtitle.setTextSize(15);
-        subtitle.setGravity(Gravity.CENTER);
+        subtitle.setGravity(
+                Gravity.CENTER
+        );
 
-        layout.addView(
+        root.addView(
                 subtitle,
                 new LinearLayout.LayoutParams(
                         -1,
@@ -153,6 +185,7 @@ public class MainActivity extends Activity {
                 )
         );
 
+        // PIN
         EditText pin =
                 new EditText(this);
 
@@ -160,14 +193,16 @@ public class MainActivity extends Activity {
         pin.setHintTextColor(MUTED);
         pin.setTextColor(TEXT);
         pin.setTextSize(20);
-        pin.setGravity(Gravity.CENTER);
+        pin.setGravity(
+                Gravity.CENTER
+        );
 
         pin.setInputType(
                 android.text.InputType.TYPE_CLASS_NUMBER |
                 android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
         );
 
-        layout.addView(
+        root.addView(
                 pin,
                 new LinearLayout.LayoutParams(
                         -1,
@@ -175,6 +210,7 @@ public class MainActivity extends Activity {
                 )
         );
 
+        // زر الفتح
         Button unlock =
                 new Button(this);
 
@@ -196,13 +232,15 @@ public class MainActivity extends Activity {
                         dp(55)
                 );
 
-        unlockParams.topMargin = dp(15);
+        unlockParams.topMargin =
+                dp(15);
 
-        layout.addView(
+        root.addView(
                 unlock,
                 unlockParams
         );
 
+        // PIN التجريبي
         TextView demo =
                 new TextView(this);
 
@@ -212,9 +250,11 @@ public class MainActivity extends Activity {
 
         demo.setTextColor(MUTED);
         demo.setTextSize(12);
-        demo.setGravity(Gravity.CENTER);
+        demo.setGravity(
+                Gravity.CENTER
+        );
 
-        layout.addView(
+        root.addView(
                 demo,
                 new LinearLayout.LayoutParams(
                         -1,
@@ -222,14 +262,15 @@ public class MainActivity extends Activity {
                 )
         );
 
+        // فتح
         unlock.setOnClickListener(v -> {
 
-            String value =
+            String entered =
                     pin.getText()
                             .toString()
                             .trim();
 
-            if (value.equals(PIN)) {
+            if (entered.equals(PIN)) {
 
                 showVault();
 
@@ -243,11 +284,11 @@ public class MainActivity extends Activity {
             }
         });
 
-        setContentView(layout);
+        setContentView(root);
     }
 
     // ============================================================
-    // VAULT
+    // VAULT SCREEN
     // ============================================================
 
     private void showVault() {
@@ -261,7 +302,9 @@ public class MainActivity extends Activity {
 
         root.setBackgroundColor(BG);
 
-        // ---------------- HEADER ----------------
+        // ========================================================
+        // HEADER
+        // ========================================================
 
         LinearLayout header =
                 new LinearLayout(this);
@@ -272,17 +315,22 @@ public class MainActivity extends Activity {
 
         header.setPadding(
                 dp(16),
+                dp(8),
                 dp(10),
-                dp(10),
-                dp(10)
+                dp(8)
         );
 
-        header.setBackgroundColor(SURFACE);
+        header.setBackgroundColor(
+                SURFACE
+        );
 
         TextView title =
                 new TextView(this);
 
-        title.setText("🔐 PhotoVault");
+        title.setText(
+                "🔐 PhotoVault"
+        );
+
         title.setTextColor(TEXT);
         title.setTextSize(21);
 
@@ -327,14 +375,16 @@ public class MainActivity extends Activity {
                 )
         );
 
-        // ---------------- TABS ----------------
+        // ========================================================
+        // TABS
+        // ========================================================
 
         LinearLayout tabs =
                 new LinearLayout(this);
 
         tabs.setPadding(
                 dp(10),
-                dp(10),
+                dp(8),
                 dp(10),
                 dp(5)
         );
@@ -342,13 +392,19 @@ public class MainActivity extends Activity {
         Button photos =
                 new Button(this);
 
-        photos.setText("🖼️ الصور");
+        photos.setText(
+                "🖼️ الصور"
+        );
+
         photos.setAllCaps(false);
 
         Button videos =
                 new Button(this);
 
-        videos.setText("🎥 الفيديوهات");
+        videos.setText(
+                "🎥 الفيديوهات"
+        );
+
         videos.setAllCaps(false);
 
         tabs.addView(
@@ -380,16 +436,20 @@ public class MainActivity extends Activity {
         photos.setOnClickListener(v -> {
 
             currentTab = 0;
+
             refreshGallery();
         });
 
         videos.setOnClickListener(v -> {
 
             currentTab = 1;
+
             refreshGallery();
         });
 
-        // ---------------- SCROLL ----------------
+        // ========================================================
+        // SCROLL
+        // ========================================================
 
         ScrollView scroll =
                 new ScrollView(this);
@@ -402,9 +462,9 @@ public class MainActivity extends Activity {
         );
 
         galleryContainer.setPadding(
-                dp(10),
+                dp(8),
                 dp(5),
-                dp(10),
+                dp(8),
                 dp(100)
         );
 
@@ -421,7 +481,9 @@ public class MainActivity extends Activity {
                 )
         );
 
-        // ---------------- ADD ----------------
+        // ========================================================
+        // ADD BUTTON
+        // ========================================================
 
         Button add =
                 new Button(this);
@@ -430,7 +492,10 @@ public class MainActivity extends Activity {
                 "＋ إضافة صور وفيديوهات"
         );
 
-        add.setTextColor(Color.WHITE);
+        add.setTextColor(
+                Color.WHITE
+        );
+
         add.setTextSize(16);
         add.setAllCaps(false);
 
@@ -469,7 +534,7 @@ public class MainActivity extends Activity {
     }
 
     // ============================================================
-    // GALLERY
+    // REFRESH GALLERY
     // ============================================================
 
     private void refreshGallery() {
@@ -485,7 +550,8 @@ public class MainActivity extends Activity {
         ArrayList<VaultItem> filtered =
                 new ArrayList<>();
 
-        for (VaultItem item : vaultItems) {
+        for (VaultItem item :
+                vaultItems) {
 
             if (currentTab == 0 &&
                     !item.video) {
@@ -499,14 +565,16 @@ public class MainActivity extends Activity {
             }
         }
 
+        // العنوان
         TextView count =
                 new TextView(this);
 
         count.setText(
-                (currentTab == 0
-                        ? "🖼️ الصور: "
-                        : "🎥 الفيديوهات: ")
-                        + filtered.size()
+                currentTab == 0
+                        ? "🖼️ الصور: " +
+                          filtered.size()
+                        : "🎥 الفيديوهات: " +
+                          filtered.size()
         );
 
         count.setTextColor(TEXT);
@@ -524,8 +592,11 @@ public class MainActivity extends Activity {
                 dp(12)
         );
 
-        galleryContainer.addView(count);
+        galleryContainer.addView(
+                count
+        );
 
+        // فارغة
         if (filtered.isEmpty()) {
 
             TextView empty =
@@ -537,21 +608,28 @@ public class MainActivity extends Activity {
                             : "لا توجد فيديوهات في الخزنة\n\nاضغط + لإضافة فيديوهات"
             );
 
-            empty.setTextColor(MUTED);
+            empty.setTextColor(
+                    MUTED
+            );
+
             empty.setTextSize(16);
-            empty.setGravity(Gravity.CENTER);
+
+            empty.setGravity(
+                    Gravity.CENTER
+            );
 
             galleryContainer.addView(
                     empty,
                     new LinearLayout.LayoutParams(
                             -1,
-                            dp(200)
+                            dp(220)
                     )
             );
 
             return;
         }
 
+        // الشبكة
         GridLayout grid =
                 new GridLayout(this);
 
@@ -565,7 +643,8 @@ public class MainActivity extends Activity {
                 )
         );
 
-        for (VaultItem item : filtered) {
+        for (VaultItem item :
+                filtered) {
 
             addThumbnail(
                     grid,
@@ -594,6 +673,29 @@ public class MainActivity extends Activity {
                 Gravity.CENTER
         );
 
+        card.setPadding(
+                dp(3),
+                dp(3),
+                dp(3),
+                dp(3)
+        );
+
+        android.graphics.drawable.GradientDrawable cardBg =
+                new android.graphics.drawable.GradientDrawable();
+
+        cardBg.setColor(
+                SURFACE
+        );
+
+        cardBg.setCornerRadius(
+                dp(10)
+        );
+
+        card.setBackground(
+                cardBg
+        );
+
+        // الصورة
         ImageView image =
                 new ImageView(this);
 
@@ -601,7 +703,8 @@ public class MainActivity extends Activity {
                 ImageView.ScaleType.CENTER_CROP
         );
 
-        File file = item.file;
+        File file =
+                item.file;
 
         if (item.video) {
 
@@ -642,14 +745,19 @@ public class MainActivity extends Activity {
                 )
         );
 
+        // علامة الفيديو
         if (item.video) {
 
             TextView play =
                     new TextView(this);
 
             play.setText("▶");
-            play.setTextColor(Color.WHITE);
-            play.setTextSize(30);
+            play.setTextColor(
+                    Color.WHITE
+            );
+
+            play.setTextSize(28);
+
             play.setGravity(
                     Gravity.CENTER
             );
@@ -671,6 +779,7 @@ public class MainActivity extends Activity {
                 )
         );
 
+        // اسم الملف
         TextView name =
                 new TextView(this);
 
@@ -678,8 +787,12 @@ public class MainActivity extends Activity {
                 item.file.getName()
         );
 
-        name.setTextColor(MUTED);
+        name.setTextColor(
+                MUTED
+        );
+
         name.setTextSize(9);
+
         name.setGravity(
                 Gravity.CENTER
         );
@@ -692,6 +805,7 @@ public class MainActivity extends Activity {
                 )
         );
 
+        // الضغط على الملف
         card.setOnClickListener(
                 v -> showFileMenu(item)
         );
@@ -755,82 +869,3 @@ public class MainActivity extends Activity {
                         }
                 )
                 .show();
-    }
-
-    // ============================================================
-    // OPEN
-    // ============================================================
-
-    private void openFile(
-            VaultItem item
-    ) {
-
-        Intent intent =
-                new Intent(
-                        Intent.ACTION_VIEW
-                );
-
-        Uri uri =
-                Uri.parse(
-                        "content://com.aichat.app.vault/"
-                                + Uri.encode(
-                                item.file.getName()
-                        )
-                );
-
-        /*
-         * في هذه المرحلة نفتح الملف بواسطة
-         * FileProvider.
-         *
-         * إذا أردنا تشغيل الفيديو والصور
-         * داخل التطبيق نفسه، سنضيف شاشة Viewer
-         * في الخطوة التالية.
-         */
-
-        Toast.makeText(
-                this,
-                "سيتم إضافة شاشة العرض الداخلية لاحقًا",
-                Toast.LENGTH_SHORT
-        ).show();
-    }
-
-    // ============================================================
-    // DELETE FROM VAULT
-    // ============================================================
-
-    private void deleteVaultFile(
-            VaultItem item
-    ) {
-
-        new AlertDialog.Builder(this)
-                .setTitle("حذف الملف")
-                .setMessage(
-                        "هل تريد حذف هذا الملف نهائيًا من الخزنة؟"
-                )
-                .setPositiveButton(
-                        "حذف",
-                        (dialog, which) -> {
-
-                            if (item.file.delete()) {
-
-                                Toast.makeText(
-                                        this,
-                                        "تم حذف الملف من الخزنة",
-                                        Toast.LENGTH_SHORT
-                                ).show();
-
-                                refreshGallery();
-
-                            } else {
-
-                                Toast.makeText(
-                                        this,
-                                        "تعذر حذف الملف",
-                                        Toast.LENGTH_SHORT
-                                ).show();
-                            }
-                        }
-                )
-                .setNegativeButton(
-                        "إلغاء",
-                        
